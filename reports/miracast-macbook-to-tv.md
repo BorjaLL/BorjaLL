@@ -8,6 +8,26 @@
 
 ---
 
+## 0b. ⭐ POSSIBLE SHORTCUT — check before building anything (school context)
+
+The school TVs show **"press Win+K to connect" / ready and waiting**. That is the signature of an **enterprise/EDU wireless-display receiver** (very commonly **ScreenBeam**, e.g. ScreenBeam 1000 EDU / 1100). These boxes **natively support AirPlay AND Miracast AND Google Cast simultaneously** — "Win+K" is just the *Windows* instruction. ([ScreenBeam 1000 EDU](https://www.screenbeam.com/products/screenbeam-1000-edu/))
+
+**Implication:** the MacBook may connect **natively via AirPlay** over the school Wi-Fi — **no Pi, no bridge, nothing to build.**
+
+**2-minute test on the Mac (on school Wi-Fi):**
+1. **Control Center → Screen Mirroring** — does the room/display appear as an AirPlay target? If yes → connect → done.
+2. Read/photograph the TV's on-screen text (brand/model/room name — likely "ScreenBeam").
+3. If not visible, in Terminal: `dns-sd -B _airplay._tcp` and `dns-sd -B _googlecast._tcp` (few seconds each, then Ctrl+C).
+
+**Interpreting results:**
+- In Screen Mirroring → **native AirPlay works; the whole Pi project is unnecessary.**
+- In `dns-sd` but not Screen Mirroring → advertises AirPlay but handshake blocked (AWDL/firewall) — usually fixable.
+- Nothing → likely **Wi-Fi client isolation** (common on school networks; blocks device-to-device for *everyone*) or a Miracast-only sink → fall back to the Pi bridge (Option C).
+
+**Caveats:** client isolation is a network-policy block the Mac can't bypass; keep to normal client discovery (Control Center / `dns-sd`), not port scans of school infrastructure.
+
+---
+
 ## 1. TL;DR
 
 - **macOS has no native Miracast support and never has.** Apple uses its own proprietary **AirPlay** protocol instead. ([Apple Community](https://discussions.apple.com/thread/6064005), [PigeonCast](https://pigeoncast.com/blogs/miracast-macbook))
