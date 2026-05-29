@@ -62,11 +62,20 @@ Build/configure software that captures the Mac screen and sends it over a protoc
 - **Pros:** Achievable with public macOS APIs (ScreenCaptureKit for capture, VideoToolbox for H.264) + existing AirPlay/Cast sink libraries.
 - **Cons:** It's *not* Miracast — only works if the TV also speaks AirPlay/Cast. ([AirServer](https://www.airserver.com/Overview))
 
-### Option C — Mac → companion Linux helper → Miracast TV (true Miracast, bridged) ⭐ true Miracast, moderate effort
-Run a tiny Linux box (Raspberry Pi, mini-PC, or even a Linux VM with a USB Wi-Fi P2P dongle passed through) as the **Miracast source**. The Mac streams its desktop to the helper over the LAN; the helper does the actual Wi-Fi Direct + RTSP + H.264/MPEG2-TS handshake to the TV.
-- **Pros:** Delivers genuine Miracast to the TV; uses a Linux stack where P2P/`wpa_supplicant` is available.
-- **Cons:** The Miracast *source* role still isn't off-the-shelf in OSS (MiracleCast only sinks today), so the helper-side sender is itself an implementation project. Requires extra hardware (P2P-capable USB Wi-Fi). Added latency from the extra hop.
-- **Reality check:** This is the most promising path to *real* Miracast, but it inherits the "no open-source sender exists" problem — see §6 risks.
+### Option C — Mac → Raspberry Pi (or Linux box) bridge → Miracast TV (true Miracast) ⭐ recommended for a Miracast-only TV you can't touch
+A small Linux device sits between the Mac and the TV and does the actual Miracast over the air to the TV's built-in receiver. **No hardware is plugged into the TV.** It's a **two-hop bridge**:
+
+1. **Mac → Pi (over the LAN, via AirPlay):** The Pi runs an AirPlay receiver (e.g. **UxPlay** / RPiPlay) so the Mac mirrors to it natively, with no Mac-side software. The Pi shows the Mac's screen.
+2. **Pi → TV (via Miracast):** The Pi runs **GNOME Network Displays**, which casts the Pi's screen to the TV's built-in Miracast sink over Wi-Fi Direct.
+
+- **Update / correction:** A working open-source Miracast **source** *does* exist — **[GNOME Network Displays](https://gitlab.gnome.org/GNOME/gnome-network-displays)** (an experimental Wi-Fi Display implementation), tested against LG WebOS TVs, MiraScreen, Measy/MontoView receivers, etc. (My earlier note that "no OSS sender exists" applied only to MiracleCast, which is sink-only.)
+- **Pros:** Genuine Miracast to the TV; nothing attached to the TV; nothing installed on the Mac (uses native AirPlay for the first hop).
+- **Cons / caveats — this is a fiddly DIY project, not plug-and-play:**
+  - **Wi-Fi Direct hardware is the gating factor.** Needs `wpa_supplicant` built with `CONFIG_P2P` + `CONFIG_WIFI_DISPLAY`, managed by NetworkManager. The Pi's **built-in Wi-Fi P2P is unreliable** (common init failures); a known-good **USB Wi-Fi P2P dongle** (e.g. RTL-based) is often required.
+  - **Likely needs two radios.** Hop 1 (AirPlay) uses the normal LAN station connection; hop 2 (Miracast) uses Wi-Fi Direct P2P. A single Pi radio generally can't do station + P2P concurrently — plan on **built-in Wi-Fi for LAN + USB dongle for P2P**.
+  - **Two encode/decode hops** (Mac→AirPlay→Pi, then Pi→Miracast→TV) add **latency**; fine for slides/video, poor for gaming/interactive. Use a **Pi 4/5** for the H.264 encode load.
+  - Setup is involved (compiling/configuring wpa_supplicant, NetworkManager P2P, UxPlay + GNOME Network Displays).
+- **Reality check:** Feasible and the *only* path that uses the TV's own Miracast without touching the TV — but budget real tinkering time, and treat the Wi-Fi adapter choice as make-or-break.
 
 ### Option D — Native macOS Miracast sender (from scratch) ❌ likely infeasible
 Implement Wi-Fi Direct P2P + RTSP + encode on the Mac directly.
@@ -98,15 +107,15 @@ Short answer: **There is no dongle you plug into a Mac that turns it into a work
 
 ## 5. Recommended plan (given a Miracast-only TV)
 
-**Phase 0 — Resolved.** TV is Miracast-only → Options A & B are out. Two live paths remain:
-- **A′ (pragmatic, recommended first):** Wireless HDMI kit into the TV's HDMI port — if a free HDMI port exists and "use the TV's Miracast specifically" is *not* a hard requirement.
-- **C (true Miracast, engineering project):** Mac → Linux helper → TV's built-in Miracast.
+**Phase 0 — Resolved.** TV is **Miracast-only** *and* must not be touched (no plugging anything into the TV). This eliminates Options A, A′ and B. **Option C (Pi bridge) is the only path** — and it's viable thanks to GNOME Network Displays.
 
-**Phase 1 — Spikes:**
-1. **A′ spike (hours):** Borrow/buy one wireless HDMI kit; confirm a free HDMI port on the TV; validate latency/quality. If acceptable, **stop here — problem solved with no code.**
-2. **C spike (days):** Stand up a Linux helper, verify a USB Wi-Fi adapter is **Wi-Fi Direct capable** (MiracleCast ships a hardware test script), and confirm it can drive the TV's Miracast *sink*. This de-risks hardware before tackling the unimplemented *source* role.
+**Phase 1 — De-risk the Wi-Fi hardware first (this is make-or-break):**
+1. Get a **Wi-Fi Direct / P2P-capable USB adapter** known to work with `wpa_supplicant` `CONFIG_P2P` (e.g. RTL-based). On a Pi, plan for **built-in Wi-Fi = LAN/AirPlay, USB dongle = P2P/Miracast**.
+2. Prove **Pi → TV Miracast** alone: install **GNOME Network Displays**, confirm it discovers and casts the Pi desktop to the TV. If this fails, the whole approach fails — stop and reassess.
 
-**Phase 2 — Pick the architecture** based on whether the HDMI-port route is acceptable.
+**Phase 2 — Add the Mac → Pi hop:** Install an AirPlay receiver (**UxPlay**) on the Pi; mirror the Mac to it natively; confirm the Mac screen shows on the Pi.
+
+**Phase 3 — Chain the hops & tune:** Cast the Pi's (AirPlay-fed) screen to the TV via GNOME Network Displays; measure end-to-end latency/quality; use a Pi 4/5 for encode headroom.
 
 **Phase 3 — Build the chosen path** (most likely Option B as a shippable app, with Option A as the no-code fallback). Reserve Option C/D for a true-Miracast requirement and budget research time accordingly.
 
@@ -114,8 +123,8 @@ Short answer: **There is no dongle you plug into a Mac that turns it into a work
 
 ## 6. Key risks & open technical questions
 
-- **Open-source Miracast *sender* does not exist** (MiracleCast is sink-only). Any "true Miracast" path requires writing the source role — the hardest, least-documented part.
-- **Wi-Fi Direct hardware compatibility** is not guaranteed; many chipsets/dongles silently lack working P2P.
+- **Miracast *source* in OSS is experimental, not mainstream.** MiracleCast is sink-only, but **GNOME Network Displays** does implement the source role (experimental). Expect rough edges, not a polished tool.
+- **Wi-Fi Direct hardware compatibility is the #1 risk.** Pi built-in Wi-Fi P2P is flaky; a specific USB P2P dongle is often required, and station + P2P usually can't share one radio (plan for two interfaces).
 - **macOS sandbox/entitlements:** ScreenCaptureKit needs Screen Recording permission; an App Store build adds further constraints.
 - **Latency** stacks up with each bridge hop — may not suit interactive/gaming use.
 - **"Miracast" may be a proxy requirement.** Often the user just wants "Mac → TV wirelessly," and the TV supports AirPlay/Cast, making real Miracast unnecessary.
@@ -136,5 +145,6 @@ Short answer: **There is no dongle you plug into a Mac that turns it into a work
 
 - macOS & Miracast: [Apple Community](https://discussions.apple.com/thread/6064005) · [PigeonCast](https://pigeoncast.com/blogs/miracast-macbook) · [Dr.Fone](https://drfone.wondershare.com/mirror-emulator/miracast-mac.html) · [Alibaba/Electronics guide](https://electronics.alibaba.com/buyingguides/miracast-for-macbook-pro-what-works-(and-what-doesn%E2%80%99t))
 - Protocol: [Wikipedia – Miracast](https://en.wikipedia.org/wiki/Miracast) · [Wi-Fi Alliance](https://www.wi-fi.org/discover-wi-fi/miracast) · [Barco Technical Overview (PDF)](https://tools.barco.com/kb-downloads/4814/Wi-Fi_CERTIFIED_Miracast_Technical_Overview_20170725.pdf) · [Copperpod IP](https://www.copperpodip.com/post/understanding-miracast-as-a-wireless-display-technology)
-- Implementation/OSS: [MiracleCast](https://github.com/albfan/miraclecast) · [MiracleCast sender issue #4](https://github.com/albfan/miraclecast/issues/4) · [Apple CoreWLAN docs](https://developer.apple.com/documentation/corewlan)
+- Implementation/OSS: [GNOME Network Displays (Miracast source)](https://gitlab.gnome.org/GNOME/gnome-network-displays) · [gnome-network-displays mirror](https://github.com/benzea/gnome-network-displays) · [MiracleCast](https://github.com/albfan/miraclecast) (sink-only) · [MiracleCast sender issue #4](https://github.com/albfan/miraclecast/issues/4) · [piracast](https://github.com/codemonkeyricky/piracast) · [lazycast](https://github.com/homeworkc/lazycast) · [Apple CoreWLAN docs](https://developer.apple.com/documentation/corewlan)
+- Pi Wi-Fi Direct / P2P: [wpa_supplicant P2P module](https://w1.fi/wpa_supplicant/devel/p2p.html) · [Pi wpa_supplicant P2P troubleshooting](https://industrialmonitordirect.com/blogs/knowledgebase/raspberry-pi-wpa-supplicant-wi-fi-direct-p2p-not-starting)
 - Commercial bridging apps: [AirParrot 3](https://www.airsquirrels.com/airparrot/) · [AirServer](https://www.airserver.com/Overview) · [Mirroring360](https://www.mirroring360.com/android-faq)
