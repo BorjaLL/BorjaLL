@@ -65,15 +65,16 @@ Build/configure software that captures the Mac screen and sends it over a protoc
 ### Option C — Mac → Linux bridge box → Miracast TV (true Miracast) ⭐ recommended for a Miracast-only TV you can't touch
 A small Linux device sits between the Mac and the TV and does the actual Miracast over the air to the TV's built-in receiver. **No hardware is plugged into the TV.** It's a **two-hop bridge**, and there are two ways to do the first hop.
 
-**Board choice is an open decision — not "use a Pi."** Two things drive it:
+**Board choice depends on the priority. For a *small, portable, latency-tolerant* box (slides/video), a Raspberry Pi 4 is the pick; for a fixed, reliable, low-latency appliance, x86 wins.** Two things drive it:
 - **The Wi-Fi Direct adapter is the make-or-break part, and it's board-independent.** Even Intel AX200/AX210 "fail silently" with GNOME Network Displays; the best-tested chipsets are **Realtek RTL8812AU/RTL8814AU** or **MediaTek MT7612U** USB adapters. Plan to buy one of these regardless of board.
-- **For the H.264 encode the Miracast leg needs, x86 beats the Pi.** The **Pi 5 has no hardware video *encoder*** (CPU-only encode, limited); an **Intel N100 mini-PC has QuickSync hardware encode** and mature "just works" drivers, and GNOME Network Displays is developed/packaged on x86 Fedora.
+- **The Miracast leg needs H.264 *encode*. Among Pis, the Pi 4 has a hardware H.264 encoder; the Pi 5 *removed* it (CPU-only).** So the **Pi 4 is the better Pi for this job.** x86 (N100/QuickSync) still encodes best of all, but isn't pocket-portable and needs mains power.
 
 | Board | Verdict for this job |
 |---|---|
-| **Old laptop / PC running Linux** | ✅ Often best: free, x86 (QuickSync), mature drivers; just add a known-good USB P2P adapter. |
-| **Intel N100 mini-PC** | ✅ Best new appliance: small, low-power, HW encode, x86 driver maturity. |
-| **Raspberry Pi 4/5** | ⚠️ Workable but weakest: no HW H.264 encoder, flaky onboard Wi-Fi P2P, fiddly. Only if already owned/preferred. |
+| **Raspberry Pi 4** | ✅ Best for *portability*: smallest self-contained Linux box, **has a HW H.264 encoder**, runs off a USB-C power bank. Encode/latency limits are fine for slides/video. |
+| **Intel N100 mini-PC** | ✅ Best for a *fixed appliance*: QuickSync HW encode, x86 driver maturity — but bulkier and needs mains power, so less portable. |
+| **Old laptop / PC (Linux)** | ✅ Cheapest if owned, x86 encode + mature drivers — but not portable (defeats "don't carry two laptops"). |
+| **Raspberry Pi 5** | ⚠️ Worse than the Pi 4 here: **no HW H.264 encoder**, and needs more power (5V/5A). |
 
 **Hop 2 (same for any board) — bridge → TV via Miracast:** Run **GNOME Network Displays**, which casts the box's screen to the TV's built-in Miracast sink over Wi-Fi Direct (via the USB P2P adapter).
 
@@ -123,17 +124,25 @@ Short answer: **There is no dongle you plug into a Mac that turns it into a work
 
 ## 5. Recommended plan (given a Miracast-only TV)
 
-**Phase 0 — Resolved.** TV is **Miracast-only** *and* must not be touched (no plugging anything into the TV). This eliminates Options A, A′ and B. **Option C (Pi bridge) is the only path** — and it's viable thanks to GNOME Network Displays.
+**Phase 0 — Resolved constraints.** TV is **Miracast-only** *and* must not be touched. The bridge must be **very small/portable** (no second laptop). Use case is **slides/video/browsing**, so **latency is not a concern**. → Options A, A′, B are out; **Option C is the path**, on a **Raspberry Pi 4** (smallest self-contained Linux box that still has a HW H.264 encoder; latency-tolerant use makes its limits irrelevant).
 
-**Phase 1 — De-risk the Wi-Fi hardware first (this is make-or-break):**
-1. Get a **Wi-Fi Direct / P2P-capable USB adapter** known to work with `wpa_supplicant` `CONFIG_P2P` (e.g. RTL-based). On a Pi, plan for **built-in Wi-Fi = LAN/AirPlay, USB dongle = P2P/Miracast**.
-2. Prove **Pi → TV Miracast** alone: install **GNOME Network Displays**, confirm it discovers and casts the Pi desktop to the TV. If this fails, the whole approach fails — stop and reassess.
+**Portable kit (fits in a small pouch):**
+- **Raspberry Pi 4** + small case + microSD
+- **USB Wi-Fi Direct adapter** (RTL8812AU/8814AU or MT7612U) — the make-or-break part
+- **Input (C1, recommended):** small **USB HDMI capture dongle** + **USB-C→HDMI** cable. *(C2 alt: no capture dongle; Pi runs an AP + UxPlay for AirPlay — fewer parts, more fragile setup.)*
+- **USB-C power bank** (Pi 4 = 5V/3A; easier on a battery than a Pi 5)
 
-**Phase 2 — Add the Mac → Pi hop (prefer wired, C1):** Plug a **USB 3.0 HDMI capture dongle** (MS2130 / Cam Link-class) into the Pi and the Mac (via USB-C→HDMI); confirm the Mac sees it as an external monitor and the Pi sees a V4L2 device. *(Fallback C2: install UxPlay and mirror via AirPlay.)*
+This replaces "carry a second laptop" with "carry a phone-sized box + a cable." It's a **DIY kit, not a sleek single dongle**, and the software is experimental.
 
-**Phase 3 — Chain the hops & tune:** Cast the Pi's (AirPlay-fed) screen to the TV via GNOME Network Displays; measure end-to-end latency/quality; use a Pi 4/5 for encode headroom.
+**Phase 1 — De-risk the two unknowns first (before buying everything):**
+1. Get the **USB Wi-Fi P2P adapter** and prove **box → TV Miracast** alone with **GNOME Network Displays** — confirm it discovers and pairs with *this specific TV*. If this fails, the whole approach fails — stop and reassess.
+2. (Can be done on any Linux machine you have; the board doesn't matter for this test.)
 
-**Phase 3 — Build the chosen path** (most likely Option B as a shippable app, with Option A as the no-code fallback). Reserve Option C/D for a true-Miracast requirement and budget research time accordingly.
+**Phase 2 — Add the Mac → box hop (wired, C1):** Plug a **USB HDMI capture dongle** into the box and the Mac (via USB-C→HDMI); confirm the Mac sees it as an external monitor and the box sees a V4L2 device.
+
+**Phase 3 — Chain the hops & tune:** Show the capture fullscreen on the box and cast that screen to the TV via GNOME Network Displays (or wire `v4l2src` into its pipeline); confirm quality. Latency isn't a target for this use case.
+
+**Phase 4 — Package for portability:** Auto-start the pipeline on boot so the kit "just works" when powered from the battery; no keyboard/monitor needed at the venue.
 
 ---
 
