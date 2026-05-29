@@ -5,6 +5,7 @@
 **Confirmed constraint (2026-05-29):** The target TV supports **Miracast only** — no AirPlay 2, no Google Cast. This rules out Options A & B below and makes a true-Miracast path mandatory.
 **Goal:** Get an app that mirrors a MacBook's desktop to a Miracast-certified TV (the wireless display standard used by most Windows/Android devices and by "Wireless Display" / Smart View TVs).
 **Chosen direction:** Portable Raspberry Pi 4 bridge (Option C1). **→ See the step-by-step [Pi 4 Build Guide](./pi4-miracast-bridge-build-guide.md)** for parts, setup, and the non-technical workflow/timing.
+**Companion docs:** [School connection checklist](./school-connection-checklist.md) (try the AirPlay shortcut first) · [DIY options, budget tiers & product/Kickstarter exploration](./diy-options-and-product-exploration.md).
 
 ---
 
