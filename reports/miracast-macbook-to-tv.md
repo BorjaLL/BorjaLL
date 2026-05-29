@@ -2,6 +2,7 @@
 
 **Status:** Research / planning draft
 **Date:** 2026-05-29
+**Confirmed constraint (2026-05-29):** The target TV supports **Miracast only** — no AirPlay 2, no Google Cast. This rules out Options A & B below and makes a true-Miracast path mandatory.
 **Goal:** Get an app that mirrors a MacBook's desktop to a Miracast-certified TV (the wireless display standard used by most Windows/Android devices and by "Wireless Display" / Smart View TVs).
 
 ---
@@ -74,17 +75,38 @@ Implement Wi-Fi Direct P2P + RTSP + encode on the Mac directly.
 
 ---
 
-## 5. Recommended plan
+## 4b. "Can I just add a dongle to the Mac?" — the hardware question
 
-**Phase 0 — Define the real requirement (decision needed, see §7).**
-Confirm whether the TV is *Miracast-only*, or whether it also supports **AirPlay 2 / Google Cast**. This single answer determines whether Option B (easy) or Option C (hard) is needed.
+Short answer: **There is no dongle you plug into a Mac that turns it into a working Miracast *sender* for an arbitrary Miracast TV.** Here's why each tempting option fails or succeeds:
 
-**Phase 1 — Spike each viable option (1–2 days each):**
-1. **Option A spike:** Try a dual-protocol (AirPlay+Miracast) dongle with native macOS mirroring. Validate latency/quality. *Cheapest answer if it satisfies the goal.*
-2. **Option B spike:** Prototype Mac screen capture (**ScreenCaptureKit**) → H.264 (**VideoToolbox**) → AirPlay/Cast sink. Confirms the "build an app" path if TV speaks AirPlay/Cast.
-3. **Option C spike:** Stand up a Linux helper, verify a USB Wi-Fi adapter is **Wi-Fi Direct capable** (MiracleCast ships a hardware test script), and confirm Miracast *sink* works. This de-risks the hardware before attempting the unimplemented *source* role.
+| Dongle idea | Verdict | Why |
+|---|---|---|
+| **USB Wi-Fi adapter** that adds Wi-Fi Direct to the Mac | ❌ Doesn't work | Even with P2P-capable hardware, you still need **Miracast *source* software on macOS — which does not exist.** Hardware alone sends nothing. Marketing claims of "USB dongle + Mac software" don't correspond to a real shipping product. |
+| **ScreenBeam USB Transmitter** (and similar HW transmitters) | ❌ Doesn't fit | It's **Windows-only** and pairs with **ScreenBeam's own proprietary receivers**, not a generic Miracast TV. ([ScreenBeam USB Transmitter](https://www.screenbeam.com/nl/products/screenbeam-usb-transmitter-2/)) |
+| **"Miracast dongle"** off Amazon | ⚠️ Wrong direction | ~Almost all of these are **receivers** that plug into a TV's HDMI. Your TV is *already* a Miracast receiver, so these are redundant. ([example](https://www.amazon.com/Wireless-Miracast-Mirroring-Receiver-Projector/dp/B08JQ5Z3K1)) |
+| **HDMI-input → Miracast-source transmitter** (box that takes Mac HDMI and emits standard Miracast to your TV) | ⚠️ Effectively nonexistent | This specific product category isn't reliably available; "wireless HDMI transmitters" almost always ship with their *own* matched receiver and don't speak standard Miracast to a third-party sink. |
+| **Wireless HDMI kit** (transmitter + its *own* receiver) | ✅ Works — but bypasses Miracast | Transmitter plugs into the Mac (USB-C→HDMI); the kit's **own receiver** plugs into the **TV's HDMI** port. The Mac sees a normal external display; **no drivers, no software.** It ignores the TV's Miracast entirely and just uses an HDMI input. Requires a free HDMI port + carrying the small receiver. |
 
-**Phase 2 — Pick the architecture** based on spike results and the Phase 0 decision.
+**Takeaway for a Miracast-only TV:** the only true *plug-and-play hardware* answer is a **wireless HDMI kit** into the TV's HDMI port (Option A′ below). If you must use the **TV's built-in Miracast** specifically, there is no Mac dongle for that — you need the **Linux-helper software bridge (Option C)**, which is an engineering project, not a purchase.
+
+### Option A′ — Wireless HDMI kit into the TV's HDMI port ⭐ easiest hardware fix
+- **Pros:** Zero software/drivers; works regardless of what wireless protocol the TV supports; Mac treats it as a plain monitor.
+- **Cons:** Needs a free **HDMI port** on the TV; you carry a small receiver; doesn't use the TV's Miracast at all; quality/latency varies by kit.
+- **Use when:** "Mac on the big screen wirelessly" is the real goal and an HDMI port is available.
+
+---
+
+## 5. Recommended plan (given a Miracast-only TV)
+
+**Phase 0 — Resolved.** TV is Miracast-only → Options A & B are out. Two live paths remain:
+- **A′ (pragmatic, recommended first):** Wireless HDMI kit into the TV's HDMI port — if a free HDMI port exists and "use the TV's Miracast specifically" is *not* a hard requirement.
+- **C (true Miracast, engineering project):** Mac → Linux helper → TV's built-in Miracast.
+
+**Phase 1 — Spikes:**
+1. **A′ spike (hours):** Borrow/buy one wireless HDMI kit; confirm a free HDMI port on the TV; validate latency/quality. If acceptable, **stop here — problem solved with no code.**
+2. **C spike (days):** Stand up a Linux helper, verify a USB Wi-Fi adapter is **Wi-Fi Direct capable** (MiracleCast ships a hardware test script), and confirm it can drive the TV's Miracast *sink*. This de-risks hardware before tackling the unimplemented *source* role.
+
+**Phase 2 — Pick the architecture** based on whether the HDMI-port route is acceptable.
 
 **Phase 3 — Build the chosen path** (most likely Option B as a shippable app, with Option A as the no-code fallback). Reserve Option C/D for a true-Miracast requirement and budget research time accordingly.
 
@@ -102,9 +124,9 @@ Confirm whether the TV is *Miracast-only*, or whether it also supports **AirPlay
 
 ## 7. Decisions needed before building
 
-1. **What exactly does the target TV support?** Miracast only, or also AirPlay 2 / Google Cast? *(Determines Option B vs C.)*
-2. **Is "Miracast specifically" a hard requirement, or is "wireless Mac→TV" the real goal?** *(Determines whether Option A/B suffice.)*
-3. **Acceptable to add a small companion device** (Pi / dongle / mini-PC) if it's the only way to get real Miracast? *(Gates Option C.)*
+1. ~~What does the TV support?~~ **Resolved: Miracast only.**
+2. **Does the TV have a free HDMI port, and is using its *built-in Miracast specifically* a hard requirement?** *(If an HDMI port is fine → Option A′ wireless HDMI kit, done. If Miracast-the-protocol is mandatory → Option C.)*
+3. **Acceptable to add a small companion device** (Pi / mini-PC) for Option C? *(Gates the only true-Miracast path.)*
 4. **Distribution target:** personal tool, open-source, or App Store product? *(Affects entitlements & architecture.)*
 5. **Latency tolerance:** presentation/video (lenient) vs interactive/gaming (strict)?
 
