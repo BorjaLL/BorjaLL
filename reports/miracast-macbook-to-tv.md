@@ -62,27 +62,36 @@ Build/configure software that captures the Mac screen and sends it over a protoc
 - **Pros:** Achievable with public macOS APIs (ScreenCaptureKit for capture, VideoToolbox for H.264) + existing AirPlay/Cast sink libraries.
 - **Cons:** It's *not* Miracast — only works if the TV also speaks AirPlay/Cast. ([AirServer](https://www.airserver.com/Overview))
 
-### Option C — Mac → Raspberry Pi (or Linux box) bridge → Miracast TV (true Miracast) ⭐ recommended for a Miracast-only TV you can't touch
+### Option C — Mac → Linux bridge box → Miracast TV (true Miracast) ⭐ recommended for a Miracast-only TV you can't touch
 A small Linux device sits between the Mac and the TV and does the actual Miracast over the air to the TV's built-in receiver. **No hardware is plugged into the TV.** It's a **two-hop bridge**, and there are two ways to do the first hop.
 
-**Hop 2 (same in both variants) — Pi → TV via Miracast:** The Pi runs **GNOME Network Displays**, which casts the Pi's screen to the TV's built-in Miracast sink over Wi-Fi Direct.
+**Board choice is an open decision — not "use a Pi."** Two things drive it:
+- **The Wi-Fi Direct adapter is the make-or-break part, and it's board-independent.** Even Intel AX200/AX210 "fail silently" with GNOME Network Displays; the best-tested chipsets are **Realtek RTL8812AU/RTL8814AU** or **MediaTek MT7612U** USB adapters. Plan to buy one of these regardless of board.
+- **For the H.264 encode the Miracast leg needs, x86 beats the Pi.** The **Pi 5 has no hardware video *encoder*** (CPU-only encode, limited); an **Intel N100 mini-PC has QuickSync hardware encode** and mature "just works" drivers, and GNOME Network Displays is developed/packaged on x86 Fedora.
 
-**Hop 1 — getting the Mac's screen onto the Pi. Two options:**
+| Board | Verdict for this job |
+|---|---|
+| **Old laptop / PC running Linux** | ✅ Often best: free, x86 (QuickSync), mature drivers; just add a known-good USB P2P adapter. |
+| **Intel N100 mini-PC** | ✅ Best new appliance: small, low-power, HW encode, x86 driver maturity. |
+| **Raspberry Pi 4/5** | ⚠️ Workable but weakest: no HW H.264 encoder, flaky onboard Wi-Fi P2P, fiddly. Only if already owned/preferred. |
 
-- **C1 — Wired HDMI capture (recommended).** Mac → USB-C-to-HDMI → **USB HDMI capture dongle** → Pi USB. The capture dongle presents EDID, so **the Mac treats it as a real external monitor** (no Mac software), and the Pi sees it as a standard **UVC / V4L2** video device. *Note: the Pi cannot ingest video directly — its HDMI ports are output-only and its USB-C is power/data only (no DisplayPort Alt Mode), so the capture dongle is required.*
-  - **Pros:** Wired = no AirPlay flakiness, no Wi-Fi contention on hop 1, consistent latency; still zero Mac-side software.
-  - **Watch:** capture dongle quality dictates latency — cheap **MS2109** sticks can add **1–2 s** and cap at 1080p30; use a **USB 3.0 MS2130 / Elgato Cam Link-class** device for low latency + 1080p60. GNOME Network Displays casts the *desktop*, so either show the capture fullscreen on the Pi and cast that, or patch its GStreamer pipeline to use `v4l2src`.
+**Hop 2 (same for any board) — bridge → TV via Miracast:** Run **GNOME Network Displays**, which casts the box's screen to the TV's built-in Miracast sink over Wi-Fi Direct (via the USB P2P adapter).
 
-- **C2 — AirPlay (no extra capture hardware).** The Pi runs an AirPlay receiver (**UxPlay** / RPiPlay); the Mac mirrors to it natively. Simpler hardware, but adds a wireless encode/decode hop and AirPlay's own variability.
+**Hop 1 — getting the Mac's screen onto the box. Two options:**
+
+- **C1 — Wired HDMI capture (recommended).** Mac → USB-C-to-HDMI → **USB HDMI capture dongle** → box's USB. The capture dongle presents EDID, so **the Mac treats it as a real external monitor** (no Mac software), and the box sees it as a standard **UVC / V4L2** video device.
+  - **Watch:** capture dongle quality dictates latency — cheap **MS2109** sticks can add **1–2 s** and cap at 1080p30; use a **USB 3.0 MS2130 / Elgato Cam Link-class** device for low latency + 1080p60. GNOME Network Displays casts the *desktop*, so either show the capture fullscreen and cast that, or patch its GStreamer pipeline to use `v4l2src`.
+
+- **C2 — AirPlay (no extra capture hardware).** The box runs an AirPlay receiver (**UxPlay**); the Mac mirrors to it natively. Simpler hardware, but adds a wireless encode/decode hop and AirPlay's own variability.
 
 - **Update / correction:** A working open-source Miracast **source** *does* exist — **[GNOME Network Displays](https://gitlab.gnome.org/GNOME/gnome-network-displays)** (an experimental Wi-Fi Display implementation), tested against LG WebOS TVs, MiraScreen, Measy/MontoView receivers, etc. (My earlier note that "no OSS sender exists" applied only to MiracleCast, which is sink-only.)
-- **Pros (both):** Genuine Miracast to the TV; nothing attached to the TV; nothing installed on the Mac.
+- **Pros:** Genuine Miracast to the TV; nothing attached to the TV; nothing installed on the Mac.
 - **Cons / caveats — this is a fiddly DIY project, not plug-and-play:**
-  - **Wi-Fi Direct hardware is the gating factor.** Needs `wpa_supplicant` built with `CONFIG_P2P` + `CONFIG_WIFI_DISPLAY`, managed by NetworkManager. The Pi's **built-in Wi-Fi P2P is unreliable** (common init failures); a known-good **USB Wi-Fi P2P dongle** (e.g. RTL-based) is often required.
-  - **C1 uses two USB peripherals:** the HDMI capture dongle + (likely) the Wi-Fi P2P dongle. C2 instead needs **two radios** (built-in Wi-Fi for LAN/AirPlay + USB dongle for P2P), since one radio generally can't do station + P2P concurrently.
-  - **Two encode/decode hops** add **latency** either way; fine for slides/video, poor for gaming/interactive. Use a **Pi 4/5** for the H.264 encode load.
-  - Setup is involved (compiling/configuring wpa_supplicant, NetworkManager P2P, GNOME Network Displays, + capture pipeline or UxPlay).
-- **Reality check:** Feasible and the *only* path that uses the TV's own Miracast without touching the TV. **C1 (wired capture) is the more robust first hop.** Treat the Wi-Fi P2P adapter as the make-or-break component.
+  - **Wi-Fi Direct hardware is the gating factor** (see board note above). Needs `wpa_supplicant` built with `CONFIG_P2P` + `CONFIG_WIFI_DISPLAY`, managed by NetworkManager (not iwd).
+  - **C1 uses two USB peripherals** (HDMI capture + Wi-Fi P2P). **C2 needs two radios** (onboard Wi-Fi for LAN/AirPlay + USB dongle for P2P), since one radio generally can't do station + P2P concurrently.
+  - **Two encode/decode hops** add **latency** either way; fine for slides/video, poor for gaming/interactive.
+  - Setup is involved (wpa_supplicant/NetworkManager P2P, GNOME Network Displays, + capture pipeline or UxPlay).
+- **Biggest project risk (board-independent):** whether GNOME Network Displays will actually *pair with this specific TV*. Test that first on any Linux box you already have + a known-good USB P2P adapter, before buying an appliance.
 
 ### Option D — Native macOS Miracast sender (from scratch) ❌ likely infeasible
 Implement Wi-Fi Direct P2P + RTSP + encode on the Mac directly.
