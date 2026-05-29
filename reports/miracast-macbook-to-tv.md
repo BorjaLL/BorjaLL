@@ -63,19 +63,26 @@ Build/configure software that captures the Mac screen and sends it over a protoc
 - **Cons:** It's *not* Miracast — only works if the TV also speaks AirPlay/Cast. ([AirServer](https://www.airserver.com/Overview))
 
 ### Option C — Mac → Raspberry Pi (or Linux box) bridge → Miracast TV (true Miracast) ⭐ recommended for a Miracast-only TV you can't touch
-A small Linux device sits between the Mac and the TV and does the actual Miracast over the air to the TV's built-in receiver. **No hardware is plugged into the TV.** It's a **two-hop bridge**:
+A small Linux device sits between the Mac and the TV and does the actual Miracast over the air to the TV's built-in receiver. **No hardware is plugged into the TV.** It's a **two-hop bridge**, and there are two ways to do the first hop.
 
-1. **Mac → Pi (over the LAN, via AirPlay):** The Pi runs an AirPlay receiver (e.g. **UxPlay** / RPiPlay) so the Mac mirrors to it natively, with no Mac-side software. The Pi shows the Mac's screen.
-2. **Pi → TV (via Miracast):** The Pi runs **GNOME Network Displays**, which casts the Pi's screen to the TV's built-in Miracast sink over Wi-Fi Direct.
+**Hop 2 (same in both variants) — Pi → TV via Miracast:** The Pi runs **GNOME Network Displays**, which casts the Pi's screen to the TV's built-in Miracast sink over Wi-Fi Direct.
+
+**Hop 1 — getting the Mac's screen onto the Pi. Two options:**
+
+- **C1 — Wired HDMI capture (recommended).** Mac → USB-C-to-HDMI → **USB HDMI capture dongle** → Pi USB. The capture dongle presents EDID, so **the Mac treats it as a real external monitor** (no Mac software), and the Pi sees it as a standard **UVC / V4L2** video device. *Note: the Pi cannot ingest video directly — its HDMI ports are output-only and its USB-C is power/data only (no DisplayPort Alt Mode), so the capture dongle is required.*
+  - **Pros:** Wired = no AirPlay flakiness, no Wi-Fi contention on hop 1, consistent latency; still zero Mac-side software.
+  - **Watch:** capture dongle quality dictates latency — cheap **MS2109** sticks can add **1–2 s** and cap at 1080p30; use a **USB 3.0 MS2130 / Elgato Cam Link-class** device for low latency + 1080p60. GNOME Network Displays casts the *desktop*, so either show the capture fullscreen on the Pi and cast that, or patch its GStreamer pipeline to use `v4l2src`.
+
+- **C2 — AirPlay (no extra capture hardware).** The Pi runs an AirPlay receiver (**UxPlay** / RPiPlay); the Mac mirrors to it natively. Simpler hardware, but adds a wireless encode/decode hop and AirPlay's own variability.
 
 - **Update / correction:** A working open-source Miracast **source** *does* exist — **[GNOME Network Displays](https://gitlab.gnome.org/GNOME/gnome-network-displays)** (an experimental Wi-Fi Display implementation), tested against LG WebOS TVs, MiraScreen, Measy/MontoView receivers, etc. (My earlier note that "no OSS sender exists" applied only to MiracleCast, which is sink-only.)
-- **Pros:** Genuine Miracast to the TV; nothing attached to the TV; nothing installed on the Mac (uses native AirPlay for the first hop).
+- **Pros (both):** Genuine Miracast to the TV; nothing attached to the TV; nothing installed on the Mac.
 - **Cons / caveats — this is a fiddly DIY project, not plug-and-play:**
   - **Wi-Fi Direct hardware is the gating factor.** Needs `wpa_supplicant` built with `CONFIG_P2P` + `CONFIG_WIFI_DISPLAY`, managed by NetworkManager. The Pi's **built-in Wi-Fi P2P is unreliable** (common init failures); a known-good **USB Wi-Fi P2P dongle** (e.g. RTL-based) is often required.
-  - **Likely needs two radios.** Hop 1 (AirPlay) uses the normal LAN station connection; hop 2 (Miracast) uses Wi-Fi Direct P2P. A single Pi radio generally can't do station + P2P concurrently — plan on **built-in Wi-Fi for LAN + USB dongle for P2P**.
-  - **Two encode/decode hops** (Mac→AirPlay→Pi, then Pi→Miracast→TV) add **latency**; fine for slides/video, poor for gaming/interactive. Use a **Pi 4/5** for the H.264 encode load.
-  - Setup is involved (compiling/configuring wpa_supplicant, NetworkManager P2P, UxPlay + GNOME Network Displays).
-- **Reality check:** Feasible and the *only* path that uses the TV's own Miracast without touching the TV — but budget real tinkering time, and treat the Wi-Fi adapter choice as make-or-break.
+  - **C1 uses two USB peripherals:** the HDMI capture dongle + (likely) the Wi-Fi P2P dongle. C2 instead needs **two radios** (built-in Wi-Fi for LAN/AirPlay + USB dongle for P2P), since one radio generally can't do station + P2P concurrently.
+  - **Two encode/decode hops** add **latency** either way; fine for slides/video, poor for gaming/interactive. Use a **Pi 4/5** for the H.264 encode load.
+  - Setup is involved (compiling/configuring wpa_supplicant, NetworkManager P2P, GNOME Network Displays, + capture pipeline or UxPlay).
+- **Reality check:** Feasible and the *only* path that uses the TV's own Miracast without touching the TV. **C1 (wired capture) is the more robust first hop.** Treat the Wi-Fi P2P adapter as the make-or-break component.
 
 ### Option D — Native macOS Miracast sender (from scratch) ❌ likely infeasible
 Implement Wi-Fi Direct P2P + RTSP + encode on the Mac directly.
@@ -113,7 +120,7 @@ Short answer: **There is no dongle you plug into a Mac that turns it into a work
 1. Get a **Wi-Fi Direct / P2P-capable USB adapter** known to work with `wpa_supplicant` `CONFIG_P2P` (e.g. RTL-based). On a Pi, plan for **built-in Wi-Fi = LAN/AirPlay, USB dongle = P2P/Miracast**.
 2. Prove **Pi → TV Miracast** alone: install **GNOME Network Displays**, confirm it discovers and casts the Pi desktop to the TV. If this fails, the whole approach fails — stop and reassess.
 
-**Phase 2 — Add the Mac → Pi hop:** Install an AirPlay receiver (**UxPlay**) on the Pi; mirror the Mac to it natively; confirm the Mac screen shows on the Pi.
+**Phase 2 — Add the Mac → Pi hop (prefer wired, C1):** Plug a **USB 3.0 HDMI capture dongle** (MS2130 / Cam Link-class) into the Pi and the Mac (via USB-C→HDMI); confirm the Mac sees it as an external monitor and the Pi sees a V4L2 device. *(Fallback C2: install UxPlay and mirror via AirPlay.)*
 
 **Phase 3 — Chain the hops & tune:** Cast the Pi's (AirPlay-fed) screen to the TV via GNOME Network Displays; measure end-to-end latency/quality; use a Pi 4/5 for encode headroom.
 
@@ -147,4 +154,5 @@ Short answer: **There is no dongle you plug into a Mac that turns it into a work
 - Protocol: [Wikipedia – Miracast](https://en.wikipedia.org/wiki/Miracast) · [Wi-Fi Alliance](https://www.wi-fi.org/discover-wi-fi/miracast) · [Barco Technical Overview (PDF)](https://tools.barco.com/kb-downloads/4814/Wi-Fi_CERTIFIED_Miracast_Technical_Overview_20170725.pdf) · [Copperpod IP](https://www.copperpodip.com/post/understanding-miracast-as-a-wireless-display-technology)
 - Implementation/OSS: [GNOME Network Displays (Miracast source)](https://gitlab.gnome.org/GNOME/gnome-network-displays) · [gnome-network-displays mirror](https://github.com/benzea/gnome-network-displays) · [MiracleCast](https://github.com/albfan/miraclecast) (sink-only) · [MiracleCast sender issue #4](https://github.com/albfan/miraclecast/issues/4) · [piracast](https://github.com/codemonkeyricky/piracast) · [lazycast](https://github.com/homeworkc/lazycast) · [Apple CoreWLAN docs](https://developer.apple.com/documentation/corewlan)
 - Pi Wi-Fi Direct / P2P: [wpa_supplicant P2P module](https://w1.fi/wpa_supplicant/devel/p2p.html) · [Pi wpa_supplicant P2P troubleshooting](https://industrialmonitordirect.com/blogs/knowledgebase/raspberry-pi-wpa-supplicant-wi-fi-direct-p2p-not-starting)
+- Pi HDMI capture / ports: [HDMI-to-USB capture on Pi (Hackaday)](https://hackaday.com/2020/12/21/heavy-raspberry-pi-user-keep-an-hdmi-to-usb-capture-device-around/) · [Adafruit HDMI→USB capture (UVC)](https://www.adafruit.com/product/4669) · [HDMI input via USB dongles (RPi forums)](https://forums.raspberrypi.com/viewtopic.php?t=291063) · [Pi 5 USB-C is power-only, no video alt mode](https://forums.raspberrypi.com/viewtopic.php?t=375782)
 - Commercial bridging apps: [AirParrot 3](https://www.airsquirrels.com/airparrot/) · [AirServer](https://www.airserver.com/Overview) · [Mirroring360](https://www.mirroring360.com/android-faq)
